@@ -1,23 +1,27 @@
 {
-  "name": "grammatik-audio-downloader",
+  "name": "grammatik-backend",
   "version": "1.0.0",
-  "description": "Backend service for downloading audio from URLs (YouTube, Spotify, etc.)",
-  "main": "audio-downloader-server.js",
+  "description": "German language learning backend with podcast RSS and Deutsche Welle support",
+  "main": "audio-downloader-server-final.js",
   "scripts": {
-    "start": "node audio-downloader-server.js",
-    "dev": "nodemon audio-downloader-server.js"
+    "start": "node audio-downloader-server-final.js",
+    "dev": "node audio-downloader-server-final.js"
   },
-  "keywords": ["audio", "downloader", "youtube", "spotify"],
-  "author": "",
+  "keywords": [
+    "german",
+    "language",
+    "learning",
+    "podcast",
+    "deutsche-welle",
+    "rss"
+  ],
+  "author": "GermanStudent29",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
   "engines": {
-    "node": ">=14.0.0"
+    "node": "16.x"
   }
 }
