@@ -9,7 +9,7 @@ const { promisify } = require('util');
 const app = express();
 const execAsync = promisify(exec);
 const port = process.env.PORT || 3001;
-
+console.log(`Using port: ${port}`);
 // Middleware
 app.use(cors());
 app.use(express.json());
