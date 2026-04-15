@@ -42,6 +42,70 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ─────────────────────────────────────────────────────────────────────────
+// AUDIO COMPRESSION FOR WHISPER (< 25MB requirement)
+// ─────────────────────────────────────────────────────────────────────────
+
+async function compressAudioForWhisper(inputFile) {
+  const outputFile = inputFile.replace('.mp3', '-compressed.mp3');
+  
+  // Check if ffmpeg is available
+  try {
+    await execAsync('ffmpeg -version', { timeout: 5000 });
+  } catch (e) {
+    console.log('ffmpeg not available, skipping compression');
+    return inputFile; // Return original if ffmpeg not available
+  }
+
+  try {
+    // Get original file size
+    const inputStats = fs.statSync(inputFile);
+    const inputSizeMB = inputStats.size / (1024 * 1024);
+    
+    console.log(`Original file size: ${inputSizeMB.toFixed(1)}MB`);
+
+    // Only compress if larger than 25MB
+    if (inputSizeMB <= 25) {
+      console.log('File already under 25MB, skipping compression');
+      return inputFile;
+    }
+
+    console.log('Compressing audio for Whisper...');
+    
+    // Calculate bitrate to fit under 25MB
+    // Formula: bitrate (kbps) = (target size in KB / duration in seconds) * 8
+    // We'll use a conservative approach: compress to 64kbps mono
+    const command = `ffmpeg -i "${inputFile}" -acodec libmp3lame -ab 64k -ac 1 -y "${outputFile}"`;
+    
+    await execAsync(command, { timeout: 120000 }); // 2 minute timeout
+    
+    // Check compressed file size
+    const outputStats = fs.statSync(outputFile);
+    const outputSizeMB = outputStats.size / (1024 * 1024);
+    
+    console.log(`Compressed file size: ${outputSizeMB.toFixed(1)}MB`);
+    
+    // If still too large, compress more aggressively
+    if (outputSizeMB > 25) {
+      console.log('Still too large, compressing more aggressively...');
+      const command2 = `ffmpeg -i "${inputFile}" -acodec libmp3lame -ab 32k -ac 1 -y "${outputFile}"`;
+      await execAsync(command2, { timeout: 120000 });
+      const finalStats = fs.statSync(outputFile);
+      const finalSizeMB = finalStats.size / (1024 * 1024);
+      console.log(`Final compressed size: ${finalSizeMB.toFixed(1)}MB`);
+    }
+    
+    // Delete original and return compressed
+    fs.unlinkSync(inputFile);
+    return outputFile;
+    
+  } catch (error) {
+    console.error('Compression error:', error.message);
+    // If compression fails, return original file
+    return inputFile;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // PODCAST RSS PARSING - IMPROVED WITH BETTER ERROR HANDLING
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -171,7 +235,7 @@ app.post('/api/download-audio', async (req, res) => {
     console.log(`Downloading audio from: ${url}`);
 
     const timestamp = Date.now();
-    const outputFile = path.join(tempDir, `audio-${timestamp}.mp3`);
+    let outputFile = path.join(tempDir, `audio-${timestamp}.mp3`);
 
     // Download audio file directly
     const audioData = await downloadFile(url, 300000); // 5 min timeout
@@ -197,10 +261,19 @@ app.post('/api/download-audio', async (req, res) => {
       });
     }
 
+    // Compress if needed for Whisper (< 25MB requirement)
+    if (fileSizeInMB > 25) {
+      console.log('File is over 25MB, compressing for Whisper compatibility...');
+      outputFile = await compressAudioForWhisper(outputFile);
+      const compressedStats = fs.statSync(outputFile);
+      const compressedSizeMB = compressedStats.size / (1024 * 1024);
+      console.log(`Compression complete: ${compressedSizeMB.toFixed(1)}MB`);
+    }
+
     // Send file
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Disposition', 'attachment; filename="audio.mp3"');
-    res.setHeader('X-File-Size-MB', fileSizeInMB.toFixed(1));
+    res.setHeader('X-File-Size-MB', (fs.statSync(outputFile).size / (1024 * 1024)).toFixed(1));
 
     const fileStream = fs.createReadStream(outputFile);
 
@@ -397,8 +470,9 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'audio-downloader',
-    features: ['podcast-rss', 'deutsche-welle', 'direct-download'],
+    features: ['podcast-rss', 'deutsche-welle', 'direct-download', 'audio-compression'],
     maxFileSize: '1GB',
+    whisperCompatible: 'Yes (auto-compresses >25MB)',
     timestamp: new Date().toISOString()
   });
 });
@@ -447,7 +521,8 @@ app.listen(port, () => {
   console.log('  • Podcast RSS feed parsing (improved)');
   console.log('  • Deutsche Welle content');
   console.log('  • Direct audio download from any URL');
-  console.log('  • Max file size: 1GB (increased from 500MB)');
+  console.log('  • Auto-compression for Whisper (>25MB files)');
+  console.log('  • Max file size: 1GB');
   console.log('\n📚 Example sources:');
   console.log('  • Slow German: https://www.slowgerman.com/en/feed');
   console.log('  • Deutsche Welle: https://www.dw.com/');
