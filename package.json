@@ -1,0 +1,23 @@
+{
+  "name": "grammatik-audio-downloader",
+  "version": "1.0.0",
+  "description": "Backend service for downloading audio from URLs (YouTube, Spotify, etc.)",
+  "main": "audio-downloader-server.js",
+  "scripts": {
+    "start": "node audio-downloader-server.js",
+    "dev": "nodemon audio-downloader-server.js"
+  },
+  "keywords": ["audio", "downloader", "youtube", "spotify"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
