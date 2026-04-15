@@ -290,10 +290,45 @@ app.get('/api/health', (req, res) => {
 
 async function compressAudio(inputFile) {
   const outputFile = inputFile.replace('.mp3', '-comp.mp3');
-  const command = `ffmpeg -i "${inputFile}" -acodec libmp3lame -ab 64k -ac 1 -y "${outputFile}" 2>&1`;
+  const inputStats = fs.statSync(inputFile);
+  const inputSizeMB = inputStats.size / (1024 * 1024);
+  
+  console.log(`Compressing: ${inputSizeMB.toFixed(1)}MB`);
+  
+  // Calculate target bitrate to stay under 25MB
+  // Formula: bitrate = (target_size_KB / duration_seconds) * 8
+  // We'll be conservative and target 20MB for safety
+  
+  // Try 32kbps first (very aggressive, but good for speech)
+  let bitrate = '32k';
+  
+  // If original is under 100MB, use 32kbps
+  // If over 100MB, use 16kbps (extremely compressed, but Whisper works with it)
+  if (inputSizeMB > 100) {
+    bitrate = '16k';
+    console.log('Large file detected, using 16kbps compression');
+  }
+  
+  const command = `ffmpeg -i "${inputFile}" -acodec libmp3lame -ab ${bitrate} -ac 1 -y "${outputFile}" 2>&1`;
   
   try {
-    await execAsync(command, { timeout: 120000 });
+    await execAsync(command, { timeout: 180000 }); // 3 minute timeout for large files
+    
+    const outputStats = fs.statSync(outputFile);
+    const outputSizeMB = outputStats.size / (1024 * 1024);
+    console.log(`Compressed: ${outputSizeMB.toFixed(1)}MB`);
+    
+    // If still over 25MB, try even more aggressive compression
+    if (outputSizeMB > 25) {
+      console.log('Still over 25MB, trying 16kbps...');
+      const command2 = `ffmpeg -i "${inputFile}" -acodec libmp3lame -ab 16k -ac 1 -y "${outputFile}" 2>&1`;
+      await execAsync(command2, { timeout: 180000 });
+      
+      const finalStats = fs.statSync(outputFile);
+      const finalSizeMB = finalStats.size / (1024 * 1024);
+      console.log(`Final compression: ${finalSizeMB.toFixed(1)}MB`);
+    }
+    
     return outputFile;
   } catch (e) {
     console.error('Compression failed:', e.message);
