@@ -235,43 +235,31 @@ app.get('/api/popular-german-podcasts', (req, res) => {
   res.json({
     podcasts: [
       {
-        name: 'Slow German (Direct)',
-        description: 'German for intermediate learners',
-        feedUrl: 'https://feeds.podigee.com/slow-german-english',
+        name: 'Korpo Talk',
+        description: 'German podcast discussions',
+        feedUrl: 'https://korpo-talk.podigee.io/feed/mp3',
         difficulty: 'B1-B2'
       },
       {
         name: 'Easy German',
         description: 'Everyday German conversations',
-        feedUrl: 'https://feeds.megaphone.fm/easygerman',
+        feedUrl: 'https://proxyfeed.svmaudio.com/feeds/easygerman/feed.xml',
         difficulty: 'A1-A2'
       },
       {
-        name: 'Deutsche Welle - Deutsch Lernen',
-        description: 'Official DW learning content',
-        feedUrl: 'https://feeds.dw.com/rde/deu/playlist',
+        name: 'Top Thema mit Vokabeln',
+        description: 'Current events with vocabulary',
+        feedUrl: 'https://rss.dw.com/xml/DKpodcast_topthemamitvokabeln_de',
         difficulty: 'A2-B1'
       },
       {
-        name: 'Deutschlandfunk Kultur Podcasts',
-        description: 'German public radio - culture',
-        feedUrl: 'https://www.deutschlandfunkkultur.de/podcast-feeds.rss',
-        difficulty: 'B1-B2'
-      },
-      {
-        name: 'Podcast Deutsch',
-        description: 'Variety of German podcasts',
-        feedUrl: 'https://www.podcast.de/feed/',
-        difficulty: 'B1-B2'
-      },
-      {
-        name: 'ARD Audiothek Selection',
-        description: 'German public broadcaster podcasts',
-        feedUrl: 'https://www.ardaudiothek.de/feeds/',
-        difficulty: 'B1-B2'
+        name: 'German Learning Podcast',
+        description: 'Comprehensive German language learning',
+        feedUrl: 'https://anchor.fm/s/10155178c/podcast/rss',
+        difficulty: 'A1-B2'
       }
     ],
-    note: 'If a feed fails, try another. Some feeds may have access restrictions.'
+    note: 'Top suggestions for German language learning.'
   });
 });
 
