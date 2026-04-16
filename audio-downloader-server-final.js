@@ -175,13 +175,12 @@ app.get('/api/health', (req, res) => {
 app.get('/api/popular-german-podcasts', (req, res) => {
   res.json({
     podcasts: [
-      { name: 'Easy German',           feedUrl: 'https://easygerman.libsyn.com/rss',                                    difficulty: 'A2-B1' },
-      { name: 'Slow German',           feedUrl: 'https://slowgerman.com/feed/podcast/',                                 difficulty: 'A2-B1' },
-      { name: 'News in Slow German',   feedUrl: 'https://anchor.fm/s/e6716b50/podcast/rss',                             difficulty: 'B1-B2' },
-      { name: 'Coffee Break German',   feedUrl: 'https://radiolingua.com/category/coffeebreakgerman/feed/',             difficulty: 'A1-B1' },
-      { name: 'GermanPod101',          feedUrl: 'https://www.germanpod101.com/feed/',                                   difficulty: 'A1-C1' }
+      { name: 'Korpo Talk',              feedUrl: 'https://korpo-talk.podigee.io/feed/mp3',                              difficulty: 'B1-B2' },
+      { name: 'Easy German',             feedUrl: 'https://proxyfeed.svmaudio.com/feeds/easygerman/feed.xml',            difficulty: 'A1-A2' },
+      { name: 'Top Thema mit Vokabeln',  feedUrl: 'https://rss.dw.com/xml/DKpodcast_topthemamitvokabeln_de',            difficulty: 'A2-B1' },
+      { name: 'German Learning Podcast', feedUrl: 'https://anchor.fm/s/10155178c/podcast/rss',                           difficulty: 'A1-B2' }
     ],
-    note: 'If a feed is temporarily unavailable, try another one.'
+    note: 'Top suggestions for German language learning.'
   });
 });
 
@@ -253,23 +252,40 @@ app.post('/api/download-audio', async (req, res) => {
 // Whisper proxy — fixes browser CORS to OpenAI and avoids exposing key in console
 app.post('/api/transcribe', upload.single('file'), async (req, res) => {
   try {
+    console.log('Transcribe request received');
+    console.log('  file:', req.file ? `${req.file.originalname} (${(req.file.size/1024/1024).toFixed(1)}MB, ${req.file.mimetype})` : 'MISSING');
+    console.log('  apiKey:', req.body.apiKey ? `${req.body.apiKey.substring(0,8)}...` : 'MISSING');
+
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
     const openaiKey = req.body.apiKey || process.env.OPENAI_API_KEY;
     if (!openaiKey) return res.status(400).json({ error: 'No OpenAI API key provided' });
 
+    // Write buffer to temp file so form-data can stream it properly
+    const tmpPath = path.join(tempDir, `whisper-${Date.now()}.mp3`);
+    fs.writeFileSync(tmpPath, req.file.buffer);
+
     const formData = new FormData();
-    formData.append('file', req.file.buffer, { filename: req.file.originalname || 'audio.mp3' });
+    formData.append('file', fs.createReadStream(tmpPath), {
+      filename: req.file.originalname || 'audio.mp3',
+      contentType: req.file.mimetype || 'audio/mpeg'
+    });
     formData.append('model', 'whisper-1');
     formData.append('language', req.body.language || 'de');
 
+    console.log('  Forwarding to OpenAI Whisper...');
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { ...formData.getHeaders(), 'Authorization': `Bearer ${openaiKey}` },
       body: formData
     });
 
+    // Clean up temp file
+    try { fs.unlinkSync(tmpPath); } catch (e) {}
+
     const text = await response.text();
+    console.log('  Whisper response:', response.status, text.substring(0, 200));
+
     if (!response.ok) {
       let msg = `Whisper error ${response.status}`;
       try { const j = JSON.parse(text); msg = (j.error && j.error.message) || msg; } catch (e) {}
