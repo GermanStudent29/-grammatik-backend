@@ -103,20 +103,44 @@ function parseRSS(xmlData) {
     // Audio URL - many formats
     let audioUrl = null;
     
-    // Try enclosure
-    let match1 = itemXml.match(/<enclosure[^>]*url=["']([^"']*\.mp3[^"']*?)["']/i);
+    // Try enclosure first (most common)
+    let match1 = itemXml.match(/<enclosure[^>]*url=["']([^"']+?)["'][^>]*type=["']audio/i);
     if (match1) audioUrl = match1[1].trim();
+    
+    // Try enclosure without type check (fallback)
+    if (!audioUrl) {
+      let match1b = itemXml.match(/<enclosure[^>]*url=["']([^"']+?)["']/i);
+      if (match1b) {
+        const url = match1b[1].trim();
+        // Accept if it looks like an audio URL
+        if (url.includes('audio') || url.includes('.mp3') || url.includes('.m4a') || url.includes('.wav') || url.includes('.ogg')) {
+          audioUrl = url;
+        }
+      }
+    }
     
     // Try media:content
     if (!audioUrl) {
-      let match2 = itemXml.match(/<media:content[^>]*url=["']([^"']*?)["']/i);
+      let match2 = itemXml.match(/<media:content[^>]*url=["']([^"']+?)["'][^>]*medium=["']audio/i);
       if (match2) audioUrl = match2[1].trim();
     }
     
-    // Try generic URL
+    // Try media:content without medium check
     if (!audioUrl) {
-      let match3 = itemXml.match(/(https?:\/\/[^\s<>"]*\.mp3[^\s<>"]*)/i);
-      if (match3) audioUrl = match3[1].trim();
+      let match2b = itemXml.match(/<media:content[^>]*url=["']([^"']+?)["']/i);
+      if (match2b) audioUrl = match2b[1].trim();
+    }
+    
+    // Try audio tag (less common but some feeds use it)
+    if (!audioUrl) {
+      let match4 = itemXml.match(/<audio[^>]*src=["']([^"']+?)["']/i);
+      if (match4) audioUrl = match4[1].trim();
+    }
+
+    // Last resort: look for any HTTPS URL that looks like audio
+    if (!audioUrl) {
+      let match5 = itemXml.match(/(https?:\/\/[^\s<>"]*(?:audio|podcast|media|\.mp3|\.m4a|\.wav|\.ogg|\.m4b)[^\s<>"]*)/i);
+      if (match5) audioUrl = match5[1].trim();
     }
 
     if (audioUrl && audioUrl.length > 10) {
@@ -127,6 +151,7 @@ function parseRSS(xmlData) {
     }
   }
 
+  console.log(`Parsed ${items.length} episodes from feed`);
   return items;
 }
 
@@ -210,21 +235,28 @@ app.post('/api/parse-podcast-feed', async (req, res) => {
   try {
     new URL(feedUrl);
   } catch (err) {
-    return res.status(400).json({ error: 'Invalid URL' });
+    return res.status(400).json({ error: 'Invalid URL format' });
   }
 
   try {
-    console.log(`Parsing: ${feedUrl}`);
+    console.log(`\n📡 Parsing feed: ${feedUrl}`);
     const xmlData = await fetchURL(feedUrl, 30000);
+    console.log(`✓ Received ${xmlData.length} bytes`);
+    
     const episodes = parseRSS(xmlData);
+    console.log(`✓ Extracted ${episodes.length} episodes`);
 
     if (episodes.length === 0) {
+      console.error('⚠ No episodes found in feed');
       return res.status(400).json({
         error: 'No episodes found',
-        suggestion: 'Feed may be unavailable or in unsupported format'
+        suggestion: 'Feed may be in unsupported format or have no audio enclosures. Try a different podcast.',
+        feedUrl: feedUrl,
+        receivedBytes: xmlData.length
       });
     }
 
+    console.log(`✓ Success! Returning ${episodes.length} episodes\n`);
     res.json({
       success: true,
       episodeCount: episodes.length,
@@ -232,9 +264,10 @@ app.post('/api/parse-podcast-feed', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Parse error:', error.message);
+    console.error(`✗ Parse error: ${error.message}\n`);
     res.status(400).json({
-      error: error.message
+      error: error.message || 'Failed to parse feed',
+      feedUrl: feedUrl
     });
   }
 });
