@@ -1,20 +1,13 @@
 {
   "name": "grammatik-backend",
-  "version": "1.0.0",
-  "description": "German language learning backend with podcast RSS and Deutsche Welle support",
+  "version": "1.1.0",
+  "description": "German language learning backend: podcast RSS, audio download proxy, Whisper proxy",
   "main": "audio-downloader-server-final.js",
   "scripts": {
     "start": "node audio-downloader-server-final.js",
     "dev": "node audio-downloader-server-final.js"
   },
-  "keywords": [
-    "german",
-    "language",
-    "learning",
-    "podcast",
-    "deutsche-welle",
-    "rss"
-  ],
+  "keywords": ["german", "language", "learning", "podcast", "rss", "whisper"],
   "author": "GermanStudent29",
   "license": "MIT",
   "dependencies": {
@@ -24,6 +17,6 @@
     "form-data": "^4.0.0"
   },
   "engines": {
-    "node": "16.x"
+    "node": ">=18.0.0"
   }
 }
