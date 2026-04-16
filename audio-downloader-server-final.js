@@ -249,6 +249,7 @@ app.post('/api/download-audio', async (req, res) => {
 });
 
 // Whisper proxy — fixes browser CORS to OpenAI and avoids exposing key in console
+// Returns both text and segment timestamps for lyric sync
 app.post('/api/transcribe', upload.single('file'), async (req, res) => {
   try {
     console.log('Transcribe request received');
@@ -260,15 +261,14 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
     const openaiKey = req.body.apiKey || process.env.OPENAI_API_KEY;
     if (!openaiKey) return res.status(400).json({ error: 'No OpenAI API key provided' });
 
-    // Use Node 18's native FormData + Blob (the form-data npm package doesn't
-    // serialize correctly with native fetch, causing "Could not parse multipart form")
     const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/mpeg' });
     const formData = new globalThis.FormData();
     formData.append('file', blob, req.file.originalname || 'audio.mp3');
     formData.append('model', 'whisper-1');
     formData.append('language', req.body.language || 'de');
+    formData.append('response_format', 'verbose_json');
 
-    console.log('  Forwarding to OpenAI Whisper...');
+    console.log('  Forwarding to OpenAI Whisper (verbose_json)...');
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${openaiKey}` },
@@ -276,7 +276,7 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
     });
 
     const text = await response.text();
-    console.log('  Whisper response:', response.status, text.substring(0, 200));
+    console.log('  Whisper response:', response.status, text.substring(0, 300));
 
     if (!response.ok) {
       let msg = `Whisper error ${response.status}`;
@@ -284,7 +284,15 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
       return res.status(response.status).json({ error: msg });
     }
     const result = JSON.parse(text);
-    res.json({ text: result.text });
+    // Return full text AND segments with start/end timestamps
+    res.json({
+      text: result.text,
+      segments: (result.segments || []).map(s => ({
+        text: s.text.trim(),
+        start: s.start,
+        end: s.end
+      }))
+    });
   } catch (error) {
     console.error('Transcribe error:', error.message);
     res.status(500).json({ error: error.message });
