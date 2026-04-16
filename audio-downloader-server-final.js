@@ -12,7 +12,6 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 const multer = require('multer');
-const FormData = require('form-data');
 
 const app = express();
 const execAsync = promisify(exec);
@@ -261,27 +260,20 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
     const openaiKey = req.body.apiKey || process.env.OPENAI_API_KEY;
     if (!openaiKey) return res.status(400).json({ error: 'No OpenAI API key provided' });
 
-    // Write buffer to temp file so form-data can stream it properly
-    const tmpPath = path.join(tempDir, `whisper-${Date.now()}.mp3`);
-    fs.writeFileSync(tmpPath, req.file.buffer);
-
-    const formData = new FormData();
-    formData.append('file', fs.createReadStream(tmpPath), {
-      filename: req.file.originalname || 'audio.mp3',
-      contentType: req.file.mimetype || 'audio/mpeg'
-    });
+    // Use Node 18's native FormData + Blob (the form-data npm package doesn't
+    // serialize correctly with native fetch, causing "Could not parse multipart form")
+    const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/mpeg' });
+    const formData = new globalThis.FormData();
+    formData.append('file', blob, req.file.originalname || 'audio.mp3');
     formData.append('model', 'whisper-1');
     formData.append('language', req.body.language || 'de');
 
     console.log('  Forwarding to OpenAI Whisper...');
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
-      headers: { ...formData.getHeaders(), 'Authorization': `Bearer ${openaiKey}` },
+      headers: { 'Authorization': `Bearer ${openaiKey}` },
       body: formData
     });
-
-    // Clean up temp file
-    try { fs.unlinkSync(tmpPath); } catch (e) {}
 
     const text = await response.text();
     console.log('  Whisper response:', response.status, text.substring(0, 200));
