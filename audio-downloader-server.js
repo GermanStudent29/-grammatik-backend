@@ -7,6 +7,7 @@ const { promisify } = require('util');
 const https = require('https');
 const http = require('http');
 const { URL } = require('url');
+const multer = require('multer');
 
 const app = express();
 const execAsync = promisify(exec);
@@ -17,6 +18,13 @@ console.log(`Using port: ${port}`);
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Multer setup for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 } // 25MB limit
+});
 
 // Temp directory
 const tempDir = path.join(__dirname, 'temp');
@@ -228,6 +236,45 @@ app.post('/api/parse-podcast-feed', async (req, res) => {
     res.status(400).json({
       error: error.message
     });
+  }
+});
+
+app.post('/api/transcribe', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    const openaiKey = req.body.apiKey || process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      return res.status(400).json({ error: 'No OpenAI API key provided' });
+    }
+
+    const formData = new (require('form-data'))();
+    formData.append('file', req.file.buffer, { filename: req.file.originalname });
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'de');
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        ...formData.getHeaders(),
+        'Authorization': `Bearer ${openaiKey}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return res.status(response.status).json({ error: error.error?.message || 'Whisper error' });
+    }
+
+    const result = await response.json();
+    res.json({ text: result.text });
+
+  } catch (error) {
+    console.error('Transcribe error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
